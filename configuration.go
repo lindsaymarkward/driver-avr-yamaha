@@ -15,8 +15,9 @@ type configService struct {
 func (c *configService) GetActions(request *model.ConfigurationRequest) (*[]suit.ReplyAction, error) {
 	return &[]suit.ReplyAction{
 		suit.ReplyAction{
-			Name:  "",
-			Label: "Yamaha AVRs",
+			Name:        "",
+			Label:       "Yamaha AVRs",
+			DisplayIcon: "music",
 		},
 	}, nil
 }
@@ -142,9 +143,9 @@ func (c *configService) list() (*suit.ConfigurationScreen, error) {
 		})
 		// create control actions
 		title := avr.Name
-		//		if isOn, _ := c.driver.devices[avr.ID].IsOn(); isOn {
-		//			title += " *"
-		//		}
+		if isOn, _ := c.driver.devices[avr.ID].IsOn(); isOn {
+			title += " *"
+		}
 		avrActions = append(avrActions, suit.ActionListOption{
 			Title: title,
 			Value: avr.ID,

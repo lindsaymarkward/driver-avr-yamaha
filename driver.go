@@ -76,7 +76,7 @@ func (d *Driver) Start(config *Config) error {
 
 func (d *Driver) createAVRDevice(config *AVRConfig) {
 
-	device, err := newDevice(d, d.Conn, config)
+	device, err := newDevice(d, config)
 
 	if err != nil {
 		log.Errorf("Failed to create new Yamaha AVR device IP:%s ID:%s name:%s ", config.IP, config.ID, config.Name, err)

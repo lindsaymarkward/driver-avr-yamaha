@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/lindsaymarkward/go-ninja/devices"
 	"github.com/lindsaymarkward/go-ync"
-	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/channels"
 	"github.com/ninjasphere/go-ninja/model"
 )
@@ -13,7 +12,7 @@ type Device struct {
 	avr *ync.AVR
 }
 
-func newDevice(driver ninja.Driver, conn *ninja.Connection, cfg *AVRConfig) (*Device, error) {
+func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 	log.Infof("\nMaking new device with ID %v at IP %v\n\n", cfg.ID, cfg.IP)
 
 	player, err := devices.CreateMediaPlayerDevice(driver, &model.Device{
@@ -27,7 +26,7 @@ func newDevice(driver ninja.Driver, conn *ninja.Connection, cfg *AVRConfig) (*De
 			"ninja:thingType":    "mediaplayer",
 			"ip:serial":          cfg.ID,
 		},
-	}, conn)
+	}, driver.Conn)
 
 	if err != nil {
 		return nil, err
@@ -42,10 +41,11 @@ func newDevice(driver ninja.Driver, conn *ninja.Connection, cfg *AVRConfig) (*De
 		Next step... compare with FakeDriver & samsung-tv
 	*/
 
-	//	player.ApplyIsOn = func() (bool, error) {
-	//		isOn, err := ync.IsOn(player.GetDeviceInfo().NaturalID, driver.config.IP)
-	//		return isOn, err
-	//	}
+	player.ApplyIsOn = func() (bool, error) {
+		isOn, err := avr.GetPower(cfg.Zone)
+		return isOn, err
+	}
+
 	// Volume Channel
 	player.ApplyVolumeUp = func() error {
 		return avr.ChangeVolume(1, cfg.Zone)
