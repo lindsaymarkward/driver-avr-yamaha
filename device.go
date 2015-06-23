@@ -1,6 +1,8 @@
 package main
 
 import (
+	"math"
+
 	"github.com/lindsaymarkward/go-ninja/devices"
 	"github.com/lindsaymarkward/go-ync"
 	"github.com/ninjasphere/go-ninja/channels"
@@ -34,12 +36,8 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 
 	avr := ync.AVR{
 		IP: cfg.IP,
-		// serial & name ??
+		// serial (ID) & name ??
 	}
-
-	/*
-		Next step... compare with FakeDriver & samsung-tv
-	*/
 
 	player.ApplyIsOn = func() (bool, error) {
 		isOn, err := avr.GetPower(cfg.Zone)
@@ -48,11 +46,56 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 
 	// Volume Channel
 	player.ApplyVolumeUp = func() error {
-		return avr.ChangeVolume(1, cfg.Zone)
+		err := avr.ChangeVolume(cfg.VolumeIncrement, cfg.Zone)
+		if err != nil {
+			return err
+		}
+		newVolume, getError := avr.GetVolume(cfg.Zone)
+		player.UpdateVolumeState(&channels.VolumeState{
+			Level: &newVolume, // float64
+		})
+		return getError
 	}
 
 	player.ApplyVolumeDown = func() error {
-		return avr.ChangeVolume(-1, cfg.Zone)
+		err := avr.ChangeVolume(-cfg.VolumeIncrement, cfg.Zone)
+		if err != nil {
+			return err
+		}
+		newVolume, getError := avr.GetVolume(cfg.Zone)
+		player.UpdateVolumeState(&channels.VolumeState{
+			Level: &newVolume, // float64
+		})
+		return getError
+	}
+
+	player.ApplyVolume = func(state *channels.VolumeState) error {
+		// translate volume in range 0-1 to Min-Max
+		// on my RX-V671 AVR, zone 2, min volume is -805 (-80.5 dB), max is 165 (+16.5 dB)
+		value := *state.Level
+		if value < 0 {
+			value = 0
+			state.Level = &value
+		} else if value > 1 {
+			value = 1
+			state.Level = &value
+		}
+
+		volumeRange := cfg.MaxVolume - ync.MinVolume
+		volume := (value * volumeRange) + ync.MinVolume
+		// clamp volume to multiples of 0.5
+		volumeValue := int(conformToClosest(volume, 0.5) * 10)
+		log.Infof("volumeRange %v, volume %v, volumeValue %v\n", volumeRange, volume, volumeValue)
+		err := avr.SetVolume(volumeValue, cfg.Zone)
+		if err != nil {
+			return err // ?? an err here crashes the driver. Perhaps we can make it more robust
+		}
+		log.Infof("VolState vol: %0.2f\n", *state.Level)
+		if state.Muted != nil {
+			log.Infof("Mute: %v\n", *state.Muted)
+		}
+		player.UpdateVolumeState(state)
+		return nil
 	}
 
 	player.ApplyToggleMuted = func() error {
@@ -61,12 +104,12 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 		return err
 	}
 
-	// enable the volume channel, supporting mute (true parameter)
+	// enable the volume channel, supporting mute (parameter is true)
 	if err := player.EnableVolumeChannel(true); err != nil {
 		player.Log().Errorf("Failed to enable volume channel: %s", err)
 	}
 
-	// On-off Channel
+	// on-off channel methods
 	player.ApplyOff = func() error {
 		player.UpdateOnOffState(false)
 		return avr.SetPower("Standby", cfg.Zone)
@@ -83,9 +126,21 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 		return err
 	}
 
-	if err := player.EnableOnOffChannel("turnOff", "turnOn", "toggle"); err != nil {
-		//	if err := player.EnableOnOffChannel("state"); err != nil {
+	// I can't find anywhere that the on/off states ever get set - on the sphereamid or in the app
+	if err := player.EnableOnOffChannel("state"); err != nil {
 		player.Log().Errorf("Failed to enable on-off channel: %s", err)
+	}
+
+	// TODO: this is a workaround to get on/off when dragging to on/play or off/pause. Find a better way if possible
+	// https://discuss.ninjablocks.com/t/mediaplayer-device-drivers/3776/2 (question asked)
+	player.ApplyPlayPause = func(isPlay bool) error {
+		if isPlay {
+			player.UpdateControlState(channels.MediaControlEventPlaying)
+			return player.ApplyOn()
+		} else {
+			player.UpdateControlState(channels.MediaControlEventPaused)
+			return player.ApplyOff()
+		}
 	}
 
 	if err := player.EnableControlChannel([]string{}); err != nil {
@@ -93,4 +148,17 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 	}
 
 	return &Device{*player, &avr}, nil
+}
+
+func roundPlaces(f float64, places int) float64 {
+	shift := math.Pow(10, float64(places))
+	return round(f*shift) / shift
+}
+func round(f float64) float64 {
+	return math.Floor(f + .5)
+}
+func conformToClosest(value, step float64) float64 {
+	multiples := int(value / step)
+	newValue := float64(multiples) * step
+	return roundPlaces(newValue, 2)
 }

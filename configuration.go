@@ -1,5 +1,9 @@
 package main
 
+// TODO: add config for #zones then create option buttons for each (main, 2...) that set current zone
+// set zone, save config - same actions but will call different zone
+// TODO: create input select (need to get available inputs and have config/get for current input for displaying)
+
 import (
 	"encoding/json"
 	"fmt"
@@ -7,6 +11,8 @@ import (
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/go-ninja/suit"
 )
+
+var inputs = []string{"NET", "AUDIO1", "AUDIO2", "USB", "TUNER"}
 
 type configService struct {
 	driver *Driver
@@ -82,19 +88,30 @@ func (c *configService) Configure(request *model.ConfigurationRequest) (*suit.Co
 		var cfg AVRConfig
 		err := json.Unmarshal(request.Data, &cfg)
 		if err != nil {
-			return c.error(fmt.Sprintf("Failed to unmarshal save config request %s: %s", request.Data, err))
+			return c.error(fmt.Sprintf("Failed to unmarshal turnOn config request %s: %s", request.Data, err))
 		}
-		c.driver.devices[cfg.ID].ApplyOn()
+		c.driver.devices[cfg.ID].ToggleOnOff()
 		return c.list()
-	case "turnOff":
+
+	case "control":
 		var cfg AVRConfig
 		err := json.Unmarshal(request.Data, &cfg)
 		if err != nil {
-			return c.error(fmt.Sprintf("Failed to unmarshal save config request %s: %s", request.Data, err))
+			return c.error(fmt.Sprintf("Failed to unmarshal control config request %s: %s", request.Data, err))
 		}
-		fmt.Println(cfg)
-		c.driver.devices[cfg.ID].ApplyOff()
-		return c.list()
+		return c.control(c.driver.config.AVRs[cfg.ID])
+
+	case "input":
+		var values map[string]string
+		err := json.Unmarshal(request.Data, &values)
+		if err != nil {
+			return c.error(fmt.Sprintf("Failed to unmarshal input config request %s: %s", request.Data, err))
+		}
+		//		fmt.Println(values)
+		//		c.driver.devices[values["ID"]].SetInput(values["input"])
+		c.driver.config.AVRs[values["ID"]].SetInput(values["input"], c.driver.config.AVRs[values["ID"]].Zone)
+		return c.control(c.driver.config.AVRs[values["ID"]])
+
 	case "confirmDelete":
 		var values map[string]string
 		err := json.Unmarshal(request.Data, &values)
@@ -108,7 +125,6 @@ func (c *configService) Configure(request *model.ConfigurationRequest) (*suit.Co
 }
 
 func (c *configService) error(message string) (*suit.ConfigurationScreen, error) {
-
 	return &suit.ConfigurationScreen{
 		Sections: []suit.Section{
 			suit.Section{
@@ -130,6 +146,53 @@ func (c *configService) error(message string) (*suit.ConfigurationScreen, error)
 	}, nil
 }
 
+func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, error) {
+	var inputActions []suit.ActionListOption
+	// create input actions
+	currentInput, err := avr.GetInput(avr.Zone)
+	log.Infof("Current input is %v %v", currentInput, err)
+	for _, input := range inputs {
+		selected := ""
+		if input == currentInput {
+			selected = " *"
+		}
+		inputActions = append(inputActions, suit.ActionListOption{
+			Title: input + selected,
+			Value: input,
+		})
+	}
+
+	screen := suit.ConfigurationScreen{
+		Title: "Control " + avr.Name,
+		Sections: []suit.Section{
+			suit.Section{
+				Title: "Select Input",
+				Contents: []suit.Typed{
+					suit.InputHidden{
+						Name:  "ID",
+						Value: avr.ID,
+					},
+					suit.ActionList{
+						Name:    "input",
+						Options: inputActions,
+						PrimaryAction: &suit.ReplyAction{
+							Name:        "input",
+							DisplayIcon: "arrow-circle-right",
+						},
+					},
+				},
+			},
+		},
+		Actions: []suit.Typed{
+			suit.ReplyAction{
+				Label: "Cancel",
+				Name:  "list",
+			},
+		},
+	}
+	return &screen, nil
+}
+
 func (c *configService) list() (*suit.ConfigurationScreen, error) {
 
 	var avrs []suit.ActionListOption
@@ -141,10 +204,12 @@ func (c *configService) list() (*suit.ConfigurationScreen, error) {
 			Title: avr.Name,
 			Value: avr.ID,
 		})
-		// create control actions
+		// create power actions
 		title := avr.Name
 		if isOn, _ := c.driver.devices[avr.ID].IsOn(); isOn {
-			title += " *"
+			title += " (On) - Turn Off"
+		} else {
+			title += " (Off) - Turn On"
 		}
 		avrActions = append(avrActions, suit.ActionListOption{
 			Title: title,
@@ -175,24 +240,20 @@ func (c *configService) list() (*suit.ConfigurationScreen, error) {
 				},
 			},
 			suit.Section{
-				Title:    "Control",
-				Subtitle: "* indicates AVR is currently on",
+				Title: "Control",
 				Contents: []suit.Typed{
-					suit.StaticText{
-						Value: "to be AVR name (loop ",
-					},
 					suit.ActionList{
 						Name:    "ID",
 						Options: avrActions,
 						PrimaryAction: &suit.ReplyAction{
 							Name:        "turnOn",
 							Label:       "Turn On",
-							DisplayIcon: "toggle-on",
+							DisplayIcon: "power-off", //"toggle-on",
 						},
 						SecondaryAction: &suit.ReplyAction{
-							Name:        "turnOff",
-							Label:       "Turn Off",
-							DisplayIcon: "toggle-off",
+							Name:        "control",
+							Label:       "Control",
+							DisplayIcon: "sliders",
 						},
 					},
 				},
@@ -242,19 +303,56 @@ func (c *configService) edit(config AVRConfig) (*suit.ConfigurationScreen, error
 						Placeholder: "IP address",
 						Value:       config.IP,
 					},
-					// TODO: Consider if I can check # zones (query amp) - OR (better) use select list
+					// TODO: Consider if I can check # zones (can't just query amp) - use select list
 					suit.InputText{
 						Name:        "zone",
 						Before:      "Zone",
 						Placeholder: "Zone number (1, 2, ...)",
 						Value:       config.Zone,
 					},
+					suit.InputText{
+						Name:        "maxVolume",
+						Before:      "Max Volume",
+						Placeholder: "Use multiples of 0.5",
+						Value:       config.MaxVolume,
+					},
+					suit.InputText{
+						Name:        "updateInterval",
+						Before:      "Update Interval",
+						Placeholder: "in seconds",
+						Value:       config.UpdateInterval,
+					},
+					suit.RadioGroup{
+						Name:     "volumeIncrement",
+						Title:    "Volume Increment",
+						Subtitle: "This has no effect unless you change the driver to not implement ApplyVolume",
+						Value:    fmt.Sprintf("%0.1f", config.VolumeIncrement), // set selected radio to value in config
+						Options: []suit.RadioGroupOption{
+							suit.RadioGroupOption{
+								Title: "0.5",
+								Value: "0.5",
+							},
+							suit.RadioGroupOption{
+								Title: "1",
+								Value: "1.0",
+							},
+							suit.RadioGroupOption{
+								Title: "2",
+								Value: "2.0",
+							},
+							suit.RadioGroupOption{
+								Title: "5",
+								Value: "5.0",
+							},
+						},
+					},
 				},
 			},
 		},
 		Actions: []suit.Typed{
-			suit.CloseAction{
+			suit.ReplyAction{
 				Label: "Cancel",
+				Name:  "list",
 			},
 			suit.ReplyAction{
 				Label:        "Save",

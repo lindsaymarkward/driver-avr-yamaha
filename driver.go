@@ -1,12 +1,18 @@
 package main
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/lindsaymarkward/go-ync"
 	"github.com/ninjasphere/go-ninja/api"
+	"github.com/ninjasphere/go-ninja/channels"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/go-ninja/support"
 )
+
+const defaultUpdateInterval = 5
 
 var info = ninja.LoadModuleInfo("./package.json")
 var log = logger.GetLogger(info.Name)
@@ -31,8 +37,11 @@ func (c *Config) get(id string) *AVRConfig {
 }
 
 type AVRConfig struct {
-	ync.AVR     // IP, ID, Name
-	Zone    int `json:"zone,string,omitempty"`
+	ync.AVR                 // IP, ID, Name
+	VolumeIncrement float64 `json:"volumeIncrement,string,omitempty"`
+	MaxVolume       float64 `json:"maxVolume,string,omitempty"`
+	Zone            int     `json:"zone,string,omitempty"`
+	UpdateInterval  int     `json:"updateInterval,string,omitempty"`
 }
 
 func NewDriver() (*Driver, error) {
@@ -74,9 +83,34 @@ func (d *Driver) Start(config *Config) error {
 	return nil
 }
 
+func (d *Driver) UpdateStates(device *Device, config *AVRConfig) {
+	// set current volume & mute state
+	volume, _ := device.avr.GetVolume(config.Zone)
+	mute, _ := device.avr.GetMuted(config.Zone)
+	// convert YNC volume value to float in range 0-1
+	volumeRange := config.MaxVolume - ync.MinVolume
+	volumeFloat := (volume - ync.MinVolume) / volumeRange
+	device.UpdateVolumeState(&channels.VolumeState{Level: &volumeFloat, Muted: &mute})
+
+	// set current power state
+	power, _ := device.avr.GetPower(config.Zone)
+	device.UpdateOnOffState(power)
+}
+
 func (d *Driver) createAVRDevice(config *AVRConfig) {
 
 	device, err := newDevice(d, config)
+
+	if config.UpdateInterval == 0 {
+		config.UpdateInterval = defaultUpdateInterval
+	}
+	// regular updates to sync states so Ninja sees updates made to AVR externally
+	go func() {
+		for {
+			d.UpdateStates(device, config)
+			time.Sleep(time.Duration(config.UpdateInterval) * time.Second)
+		}
+	}()
 
 	if err != nil {
 		log.Errorf("Failed to create new Yamaha AVR device IP:%s ID:%s name:%s ", config.IP, config.ID, config.Name, err)
@@ -111,6 +145,9 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 		existing.IP = avr.IP
 		existing.Name = avr.Name
 		existing.Zone = avr.Zone
+		existing.VolumeIncrement = avr.VolumeIncrement
+		// TODO: check/fix MaxVolume - clamp
+		existing.MaxVolume = avr.MaxVolume
 		device, ok := d.devices[serialNumber]
 		if ok {
 			device.avr.IP = avr.IP
@@ -123,7 +160,8 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 
 		go d.createAVRDevice(&avr)
 	}
-
+	// ** temp
+	fmt.Printf("Config now: %v\n", d.config)
 	return d.SendEvent("config", d.config)
 }
 
