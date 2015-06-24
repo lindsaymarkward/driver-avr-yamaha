@@ -10,11 +10,12 @@ Use the configuration (in Labs or http://ninjasphere.local) to:
  
   - create and rename an AVR
   - control power
+  - set input
   
 Installation
 ------------
 
-Copy both package.json and the sphere-yeelight binary (from the release) into `/data/sphere/user-autostart/drivers/sphere-yamaha` (create the directory as needed) and run `nservice sphere-yamaha start` on (or restart) the sphereamid.
+Copy both package.json and the binary (from the release) into `/data/sphere/user-autostart/drivers/sphere-yamaha` (create the directory as needed) and run `nservice sphere-yamaha start` on (or restart) the sphereamid.
 
 Known Issues
 ------------

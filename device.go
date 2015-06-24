@@ -40,8 +40,11 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 	}
 
 	player.ApplyIsOn = func() (bool, error) {
-		isOn, err := avr.GetPower(cfg.Zone)
-		return isOn, err
+		return avr.GetPower(cfg.Zone)
+	}
+
+	player.ApplyGetPower = func() (bool, error) {
+		return avr.GetPower(cfg.Zone)
 	}
 
 	// Volume Channel
@@ -83,17 +86,17 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 
 		volumeRange := cfg.MaxVolume - ync.MinVolume
 		volume := (value * volumeRange) + ync.MinVolume
-		// clamp volume to multiples of 0.5
+		// clamp volume to multiples of 0.5 to match AVR requirements
 		volumeValue := int(conformToClosest(volume, 0.5) * 10)
-		log.Infof("volumeRange %v, volume %v, volumeValue %v\n", volumeRange, volume, volumeValue)
+		//		log.Infof("volumeRange %v, volume %v, volumeValue %v\n", volumeRange, volume, volumeValue)
 		err := avr.SetVolume(volumeValue, cfg.Zone)
 		if err != nil {
 			return err // ?? an err here crashes the driver. Perhaps we can make it more robust
 		}
-		log.Infof("VolState vol: %0.2f\n", *state.Level)
-		if state.Muted != nil {
-			log.Infof("Mute: %v\n", *state.Muted)
-		}
+		//		log.Infof("VolState vol: %0.2f\n", *state.Level)
+		//		if state.Muted != nil {
+		//			log.Infof("Mute: %v\n", *state.Muted)
+		//		}
 		player.UpdateVolumeState(state)
 		return nil
 	}
@@ -124,6 +127,16 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 		state, err := avr.TogglePower(cfg.Zone)
 		player.UpdateOnOffState(state)
 		return err
+	}
+
+	// Workaround for on/off control mimicked by play/pause
+	player.UpdatePowerPlay = func(state bool) {
+		if state {
+			player.UpdateControlState(channels.MediaControlEventPlaying)
+		} else {
+			player.UpdateControlState(channels.MediaControlEventPaused)
+		}
+
 	}
 
 	// I can't find anywhere that the on/off states ever get set - on the sphereamid or in the app

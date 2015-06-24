@@ -1,8 +1,7 @@
 package main
 
-// TODO: add config for #zones then create option buttons for each (main, 2...) that set current zone
-// set zone, save config - same actions but will call different zone
-// TODO: create input select (need to get available inputs and have config/get for current input for displaying)
+// TODO: add config for #zones then create option buttons (in same page as inputs) for each (main, 2...) that set current zone. Setting zone saves the config - same actions but will call different zone
+// TODO: optional force input on ON/Play
 
 import (
 	"encoding/json"
@@ -12,7 +11,8 @@ import (
 	"github.com/ninjasphere/go-ninja/suit"
 )
 
-var inputs = []string{"NET", "AUDIO1", "AUDIO2", "USB", "TUNER"}
+// TODO: make desired inputs a config item?
+var inputs = []string{"NET RADIO", "AUDIO1", "AUDIO2", "USB", "TUNER"}
 
 type configService struct {
 	driver *Driver
@@ -22,7 +22,7 @@ func (c *configService) GetActions(request *model.ConfigurationRequest) (*[]suit
 	return &[]suit.ReplyAction{
 		suit.ReplyAction{
 			Name:        "",
-			Label:       "Yamaha AVRs",
+			Label:       "Yamaha AV Receivers",
 			DisplayIcon: "music",
 		},
 	}, nil
@@ -90,6 +90,7 @@ func (c *configService) Configure(request *model.ConfigurationRequest) (*suit.Co
 		if err != nil {
 			return c.error(fmt.Sprintf("Failed to unmarshal turnOn config request %s: %s", request.Data, err))
 		}
+		// turn on/off (which updates state)
 		c.driver.devices[cfg.ID].ToggleOnOff()
 		return c.list()
 
@@ -248,7 +249,7 @@ func (c *configService) list() (*suit.ConfigurationScreen, error) {
 						PrimaryAction: &suit.ReplyAction{
 							Name:        "turnOn",
 							Label:       "Turn On",
-							DisplayIcon: "power-off", //"toggle-on",
+							DisplayIcon: "power-off",
 						},
 						SecondaryAction: &suit.ReplyAction{
 							Name:        "control",
@@ -373,8 +374,8 @@ func (c *configService) confirmDelete(id string) (*suit.ConfigurationScreen, err
 			suit.Section{
 				Contents: []suit.Typed{
 					suit.Alert{
-						Title:        "Confirm Delete" + c.driver.config.AVRs[id].Name,
-						Subtitle:     "Do you really want to delete this AVR?",
+						Title:        "Confirm deletion of " + c.driver.config.AVRs[id].Name,
+						Subtitle:     "Do you really want to delete this AV Receiver?",
 						DisplayClass: "danger",
 						DisplayIcon:  "warning",
 					},

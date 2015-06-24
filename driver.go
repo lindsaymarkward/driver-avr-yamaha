@@ -41,6 +41,7 @@ type AVRConfig struct {
 	VolumeIncrement float64 `json:"volumeIncrement,string,omitempty"`
 	MaxVolume       float64 `json:"maxVolume,string,omitempty"`
 	Zone            int     `json:"zone,string,omitempty"`
+	Zones           int     `json:"zones,string,omitempty"`
 	UpdateInterval  int     `json:"updateInterval,string,omitempty"`
 }
 
@@ -146,7 +147,6 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 		existing.Name = avr.Name
 		existing.Zone = avr.Zone
 		existing.VolumeIncrement = avr.VolumeIncrement
-		// TODO: check/fix MaxVolume - clamp
 		existing.MaxVolume = avr.MaxVolume
 		device, ok := d.devices[serialNumber]
 		if ok {
