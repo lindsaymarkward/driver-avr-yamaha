@@ -54,9 +54,11 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 			return err
 		}
 		newVolume, getError := avr.GetVolume(cfg.Zone)
-		player.UpdateVolumeState(&channels.VolumeState{
-			Level: &newVolume, // float64
-		})
+		if getError == nil {
+			player.UpdateVolumeState(&channels.VolumeState{
+				Level: &newVolume, // float64
+			})
+		}
 		return getError
 	}
 
@@ -66,9 +68,11 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 			return err
 		}
 		newVolume, getError := avr.GetVolume(cfg.Zone)
-		player.UpdateVolumeState(&channels.VolumeState{
-			Level: &newVolume, // float64
-		})
+		if getError == nil {
+			player.UpdateVolumeState(&channels.VolumeState{
+				Level: &newVolume, // float64
+			})
+		}
 		return getError
 	}
 

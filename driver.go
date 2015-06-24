@@ -86,16 +86,19 @@ func (d *Driver) Start(config *Config) error {
 
 func (d *Driver) UpdateStates(device *Device, config *AVRConfig) {
 	// set current volume & mute state
-	volume, _ := device.avr.GetVolume(config.Zone)
-	mute, _ := device.avr.GetMuted(config.Zone)
-	// convert YNC volume value to float in range 0-1
-	volumeRange := config.MaxVolume - ync.MinVolume
-	volumeFloat := (volume - ync.MinVolume) / volumeRange
-	device.UpdateVolumeState(&channels.VolumeState{Level: &volumeFloat, Muted: &mute})
-
+	volume, errVol := device.avr.GetVolume(config.Zone)
+	mute, errMute := device.avr.GetMuted(config.Zone)
+	if errVol == nil && errMute == nil {
+		// convert YNC volume value to float in range 0-1
+		volumeRange := config.MaxVolume - ync.MinVolume
+		volumeFloat := (volume - ync.MinVolume) / volumeRange
+		device.UpdateVolumeState(&channels.VolumeState{Level: &volumeFloat, Muted: &mute})
+	}
 	// set current power state
-	power, _ := device.avr.GetPower(config.Zone)
-	device.UpdateOnOffState(power)
+	power, errPower := device.avr.GetPower(config.Zone)
+	if errPower == nil {
+		device.UpdateOnOffState(power)
+	}
 }
 
 func (d *Driver) createAVRDevice(config *AVRConfig) {
@@ -146,6 +149,7 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 		existing.IP = avr.IP
 		existing.Name = avr.Name
 		existing.Zone = avr.Zone
+		existing.Zones = avr.Zones
 		existing.VolumeIncrement = avr.VolumeIncrement
 		existing.MaxVolume = avr.MaxVolume
 		device, ok := d.devices[serialNumber]
