@@ -1,7 +1,7 @@
 package main
 
 // TODO: optional force input on ON/Play
-
+// TODO NEXT: delete avr, set serial/ID with XML - test this
 import (
 	"encoding/json"
 	"fmt"
@@ -129,6 +129,9 @@ func (c *configService) Configure(request *model.ConfigurationRequest) (*suit.Co
 			return c.error(fmt.Sprintf("Failed to unmarshal input config request %s: %s", request.Data, err))
 		}
 		c.driver.config.AVRs[values["ID"]].SetInput(values["input"], c.driver.config.AVRs[values["ID"]].Zone)
+		// send/save config
+		//		c.driver.config.AVRs[values["ID"]].Input =
+		//		c.driver.SendEvent("config", c.driver.config)
 		return c.control(c.driver.config.AVRs[values["ID"]])
 
 	case "zone":
@@ -139,12 +142,9 @@ func (c *configService) Configure(request *model.ConfigurationRequest) (*suit.Co
 		}
 		zoneNumber, _ := strconv.Atoi(values["zone"])
 		log.Infof("\nzone - %v\n", zoneNumber)
+		// send/save config
 		c.driver.config.AVRs[values["ID"]].Zone = zoneNumber
-		err = c.driver.saveAVR(*c.driver.config.AVRs[values["ID"]])
-		if err != nil {
-			return c.error(fmt.Sprintf("Could not update config for AVR: %s", err))
-		}
-
+		c.driver.SendEvent("config", c.driver.config)
 		return c.control(c.driver.config.AVRs[values["ID"]])
 
 	case "confirmDelete":
@@ -184,6 +184,10 @@ func (c *configService) error(message string) (*suit.ConfigurationScreen, error)
 func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, error) {
 	var inputActions []suit.ActionListOption
 	mainTitle := "Main"
+	// if zone has not been set, make it the default (main zone)
+	if avr.Zone == 0 {
+		avr.Zone = 1
+	}
 	if avr.Zone == 1 {
 		mainTitle += " *"
 	}
@@ -191,8 +195,8 @@ func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, erro
 		Title: mainTitle,
 		Value: "1",
 	}}
-	// create input actions
 	// TODO: (one day if needed), show inputs relevant to current zone (e.g. Zone 2 has no HDMI)
+	// create input actions
 	currentInput, _ := avr.GetInput(avr.Zone)
 	for _, input := range inputs {
 		selected := ""
@@ -236,6 +240,7 @@ func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, erro
 					},
 				},
 			},
+			// TODO: only show if power is on; input selection doesn't work if power is off
 			suit.Section{
 				Title: "Select Input - Zone " + fmt.Sprintf("%v", avr.Zone),
 				Contents: []suit.Typed{
@@ -296,7 +301,7 @@ func (c *configService) list() (*suit.ConfigurationScreen, error) {
 	for _, avr := range c.driver.config.AVRs {
 		// create edit actions
 		avrs = append(avrs, suit.ActionListOption{
-			Title: avr.Name,
+			Title: avr.Name + " (" + avr.Model + ")",
 			Value: avr.ID,
 		})
 		// create power actions
@@ -374,7 +379,7 @@ func (c *configService) edit(config AVRConfig) (*suit.ConfigurationScreen, error
 
 	title := "New Yamaha AVR"
 	if config.ID != "" {
-		title = "Editing Yamaha AVR"
+		title = "Editing Yamaha AVR (" + config.Model + ")"
 	}
 
 	screen := suit.ConfigurationScreen{
@@ -398,7 +403,7 @@ func (c *configService) edit(config AVRConfig) (*suit.ConfigurationScreen, error
 						Placeholder: "IP address",
 						Value:       config.IP,
 					},
-					// TODO: Consider if I can check # zones (can't just query amp) - use select list
+					// TODO: Consider if I can check # zones (can't just query amp?)
 					suit.InputText{
 						Name:        "zones",
 						Before:      "Zones",

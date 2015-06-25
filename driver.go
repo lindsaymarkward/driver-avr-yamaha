@@ -1,8 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"time"
+
+	"fmt"
 
 	"github.com/lindsaymarkward/go-ync"
 	"github.com/ninjasphere/go-ninja/api"
@@ -40,9 +41,10 @@ type AVRConfig struct {
 	ync.AVR                 // IP, ID, Name
 	VolumeIncrement float64 `json:"volumeIncrement,string,omitempty"`
 	MaxVolume       float64 `json:"maxVolume,string,omitempty"`
-	Zone            int     `json:"zone,string,omitempty"`
 	Zones           int     `json:"zones,string,omitempty"`
 	UpdateInterval  int     `json:"updateInterval,string,omitempty"`
+	Zone            int     `json:"zone,string,omitempty"`
+	//	Input
 }
 
 func NewDriver() (*Driver, error) {
@@ -85,6 +87,7 @@ func (d *Driver) Start(config *Config) error {
 }
 
 func (d *Driver) UpdateStates(device *Device, config *AVRConfig) {
+	// TODO: replace individual calls with one that gets all data with only one http request
 	// set current volume & mute state
 	volume, errVol := device.avr.GetVolume(config.Zone)
 	mute, errMute := device.avr.GetMuted(config.Zone)
@@ -118,10 +121,10 @@ func (d *Driver) createAVRDevice(config *AVRConfig) {
 
 	if err != nil {
 		log.Errorf("Failed to create new Yamaha AVR device IP:%s ID:%s name:%s ", config.IP, config.ID, config.Name, err)
-	} else {
-		d.devices[config.ID] = device
-		log.Infof("Created device at IP %v\n", device.avr.IP)
+		return
 	}
+	d.devices[config.ID] = device
+	log.Infof("Created device with ID %v at IP %v\n", config.ID, device.avr.IP)
 }
 
 // saveAVR saves configuration set in configuration form (Labs)
@@ -140,6 +143,13 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 	//	if err != nil {
 	//		return fmt.Errorf("Failed to get mac address for TV. Is it online?")
 	//	}
+	//	xmlURL := "http://" + avr.IP + ":49154/MediaRenderer/desc.xml"
+	err := avr.GetXMLData()
+	if err != nil {
+		log.Errorf("\nCould not connect to AVR. Is it online? - %v\n", err)
+		return fmt.Errorf("Could not connect to AVR. Is it online?")
+	}
+	log.Infof("Got model: %v, at IP: %v\n", avr.Model, avr.ID)
 	serialNumber := "033E2543" // TODO: change to get from device, but needs to be unique... serial # available -UDP & HTTP (http://192.168.1.221:49154/MediaRenderer/desc.xml)?
 
 	existing := d.config.get(serialNumber)
@@ -147,11 +157,13 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 	if existing != nil {
 		log.Infof("Re-ceating previously stored AVR, %v (%v)\n", avr.ID, existing.ID)
 		existing.IP = avr.IP
+		existing.Model = avr.Model
 		existing.Name = avr.Name
-		existing.Zone = avr.Zone
 		existing.Zones = avr.Zones
-		existing.VolumeIncrement = avr.VolumeIncrement
+		//		existing.Zone = avr.Zone	// not set in save anymore - remove...
+		//		existing.VolumeIncrement = avr.VolumeIncrement
 		existing.MaxVolume = avr.MaxVolume
+		existing.UpdateInterval = avr.UpdateInterval
 		device, ok := d.devices[serialNumber]
 		if ok {
 			device.avr.IP = avr.IP
@@ -164,8 +176,7 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 
 		go d.createAVRDevice(&avr)
 	}
-	// ** temp
-	fmt.Printf("Config now: %v\n", d.config)
+	//	fmt.Printf("Config now: %v\n", d.config)
 	return d.SendEvent("config", d.config)
 }
 

@@ -1,7 +1,7 @@
 # sphere-yamaha
 Ninja Sphere driver (Go) for controlling Yamaha Audio Video Receivers (AVRs)
 
-Allowing control of one zone
+Allowing control of one zone at a time from the sphereamid and phone app
 
   - power (on/off) 
   - volume
@@ -11,6 +11,7 @@ Use the configuration (in Labs or http://ninjasphere.local) to:
   - create and rename an AVR
   - control power
   - set input
+  - set zone (set input/power for selected zone)
   
 Installation
 ------------
