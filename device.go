@@ -15,7 +15,7 @@ type Device struct {
 }
 
 func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
-	log.Infof("\nMaking new device with ID %v at IP %v\n\n", cfg.ID, cfg.IP)
+	log.Infof("Making new device for %v AVR with serial number %v at IP %v\n", cfg.Model, cfg.ID, cfg.IP)
 
 	player, err := devices.CreateMediaPlayerDevice(driver, &model.Device{
 		NaturalID:     cfg.ID, // serial number
@@ -23,7 +23,7 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 		Name:          &cfg.Name,
 		Signatures: &map[string]string{
 			"ninja:manufacturer": "Yamaha",
-			"ninja:productName":  "Yamaha AVR", // TODO: add model number here (like RX-V671) cfg.Model
+			"ninja:productName":  "Yamaha " + cfg.Model,
 			"ninja:productType":  "MediaPlayer",
 			"ninja:thingType":    "mediaplayer",
 			"ip:serial":          cfg.ID,
@@ -36,6 +36,7 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 
 	avr := ync.AVR{
 		IP: cfg.IP,
+		// TODO: where do these get set... what here?
 		// serial (ID) & name ??
 	}
 
@@ -95,12 +96,8 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 		//		log.Infof("volumeRange %v, volume %v, volumeValue %v\n", volumeRange, volume, volumeValue)
 		err := avr.SetVolume(volumeValue, cfg.Zone)
 		if err != nil {
-			return err // ?? an err here crashes the driver. Perhaps we can make it more robust
+			return err // ?? an err here crashes the driver (does it still?). Perhaps we can make it more robust
 		}
-		//		log.Infof("VolState vol: %0.2f\n", *state.Level)
-		//		if state.Muted != nil {
-		//			log.Infof("Mute: %v\n", *state.Muted)
-		//		}
 		player.UpdateVolumeState(state)
 		return nil
 	}

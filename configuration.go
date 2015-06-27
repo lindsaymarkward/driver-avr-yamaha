@@ -1,7 +1,5 @@
 package main
 
-// TODO: optional force input on ON/Play
-// TODO NEXT: delete avr, set serial/ID with XML - test this
 import (
 	"encoding/json"
 	"fmt"
@@ -12,6 +10,7 @@ import (
 	"github.com/ninjasphere/go-ninja/suit"
 )
 
+// TODO: optional force input on ON/Play
 // TODO: make desired inputs a config item? (ideally, get from device, but doesn't seem possible?)
 var inputs = []string{"NET RADIO", "AUDIO1", "AUDIO2", "USB", "TUNER"}
 
@@ -174,7 +173,7 @@ func (c *configService) error(message string) (*suit.ConfigurationScreen, error)
 		},
 		Actions: []suit.Typed{
 			suit.ReplyAction{
-				Label: "Cancel",
+				Label: "Back",
 				Name:  "list",
 			},
 		},
@@ -240,9 +239,10 @@ func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, erro
 					},
 				},
 			},
-			// TODO: only show if power is on; input selection doesn't work if power is off
+			// TODO: (one day) only show if power is on; input selection doesn't work if power is off
 			suit.Section{
-				Title: "Select Input - Zone " + fmt.Sprintf("%v", avr.Zone),
+				Title:    "Select Input - Zone " + fmt.Sprintf("%v", avr.Zone),
+				Subtitle: "Input selection doesn't work unless the zone's power is on.",
 				Contents: []suit.Typed{
 					suit.InputHidden{
 						Name:  "ID",
@@ -383,7 +383,8 @@ func (c *configService) edit(config AVRConfig) (*suit.ConfigurationScreen, error
 	}
 
 	screen := suit.ConfigurationScreen{
-		Title: title,
+		Title:    title,
+		Subtitle: "Please complete all of the fields.",
 		Sections: []suit.Section{
 			suit.Section{
 				Contents: []suit.Typed{
@@ -473,10 +474,10 @@ func (c *configService) confirmDelete(id string) (*suit.ConfigurationScreen, err
 	return &suit.ConfigurationScreen{
 		Sections: []suit.Section{
 			suit.Section{
+				Title: "Confirm Deletion of " + c.driver.config.AVRs[id].Name + " (" + c.driver.config.AVRs[id].Model + ")",
 				Contents: []suit.Typed{
 					suit.Alert{
-						Title:        "Confirm deletion of " + c.driver.config.AVRs[id].Name,
-						Subtitle:     "Do you really want to delete this AV Receiver?",
+						Title:        "Do you really want to delete this AV Receiver?",
 						DisplayClass: "danger",
 						DisplayIcon:  "warning",
 					},

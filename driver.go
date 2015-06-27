@@ -42,9 +42,8 @@ type AVRConfig struct {
 	VolumeIncrement float64 `json:"volumeIncrement,string,omitempty"`
 	MaxVolume       float64 `json:"maxVolume,string,omitempty"`
 	Zones           int     `json:"zones,string,omitempty"`
-	UpdateInterval  int     `json:"updateInterval,string,omitempty"`
 	Zone            int     `json:"zone,string,omitempty"`
-	//	Input
+	UpdateInterval  int     `json:"updateInterval,string,omitempty"`
 }
 
 func NewDriver() (*Driver, error) {
@@ -66,7 +65,7 @@ func NewDriver() (*Driver, error) {
 }
 
 func (d *Driver) Start(config *Config) error {
-	log.Infof("Driver Starting with config %+v", config)
+	log.Infof("Driver starting with config %+v", config)
 
 	if config.AVRs == nil {
 		config.AVRs = make(map[string]*AVRConfig)
@@ -86,27 +85,29 @@ func (d *Driver) Start(config *Config) error {
 	return nil
 }
 
-func (d *Driver) UpdateStates(device *Device, config *AVRConfig) {
-	// TODO: replace individual calls with one that gets all data with only one http request
-	// set current volume & mute state
-	volume, errVol := device.avr.GetVolume(config.Zone)
-	mute, errMute := device.avr.GetMuted(config.Zone)
-	if errVol == nil && errMute == nil {
-		// convert YNC volume value to float in range 0-1
-		volumeRange := config.MaxVolume - ync.MinVolume
-		volumeFloat := (volume - ync.MinVolume) / volumeRange
-		device.UpdateVolumeState(&channels.VolumeState{Level: &volumeFloat, Muted: &mute})
+func (d *Driver) UpdateStates(device *Device, config *AVRConfig) error {
+	// set current states
+	state, err := device.avr.GetState(config.Zone)
+	if err != nil {
+		return err
 	}
-	// set current power state
-	power, errPower := device.avr.GetPower(config.Zone)
-	if errPower == nil {
-		device.UpdateOnOffState(power)
-	}
+	// convert YNC volume value to float in range 0-1
+	volumeRange := config.MaxVolume - ync.MinVolume
+	volumeFloat := (state.Volume - ync.MinVolume) / volumeRange
+
+	device.UpdateVolumeState(&channels.VolumeState{Level: &volumeFloat, Muted: &state.Muted})
+	device.UpdateOnOffState(state.Power)
+	return nil
 }
 
-func (d *Driver) createAVRDevice(config *AVRConfig) {
+func (d *Driver) createAVRDevice(config *AVRConfig) error {
 
 	device, err := newDevice(d, config)
+	if err != nil {
+		errorMsg := fmt.Errorf("Failed to create new Yamaha AVR device IP:%s ID:%s name:%s - %s", config.IP, config.ID, config.Name, err)
+		log.Errorf(fmt.Sprintf("%s", errorMsg))
+		return errorMsg
+	}
 
 	if config.UpdateInterval == 0 {
 		config.UpdateInterval = defaultUpdateInterval
@@ -114,54 +115,43 @@ func (d *Driver) createAVRDevice(config *AVRConfig) {
 	// regular updates to sync states so Ninja sees updates made to AVR externally
 	go func() {
 		for {
-			d.UpdateStates(device, config)
+			if device != nil {
+				d.UpdateStates(device, config)
+			}
 			time.Sleep(time.Duration(config.UpdateInterval) * time.Second)
 		}
 	}()
 
-	if err != nil {
-		log.Errorf("Failed to create new Yamaha AVR device IP:%s ID:%s name:%s ", config.IP, config.ID, config.Name, err)
-		return
-	}
 	d.devices[config.ID] = device
 	log.Infof("Created device with ID %v at IP %v\n", config.ID, device.avr.IP)
+	return nil
 }
 
 // saveAVR saves configuration set in configuration form (Labs)
 func (d *Driver) saveAVR(avr AVRConfig) error {
-
-	// reset config
-	//	d.config = Config{}
-	//	return d.SendEvent("config", d.config)
-
-	//	if !(&ync.AVR{IP: avr.IP}).Online(time.Second * 5) {
-	//		return fmt.Errorf("Could not connect to TV. Is it online?")
-	//	}
-	// TODO: check with get command?
-
-	//	mac, err := getMACAddress(avr.Host, time.Second*10)
-	//	if err != nil {
-	//		return fmt.Errorf("Failed to get mac address for TV. Is it online?")
-	//	}
-	//	xmlURL := "http://" + avr.IP + ":49154/MediaRenderer/desc.xml"
+	// read data from the amp's XML details using IP to see if it's online
 	err := avr.GetXMLData()
 	if err != nil {
-		log.Errorf("\nCould not connect to AVR. Is it online? - %v\n", err)
-		return fmt.Errorf("Could not connect to AVR. Is it online?")
+		errorMsg := fmt.Errorf("Could not connect to AVR (%v). Is it online?\n", err)
+		log.Errorf(fmt.Sprintf("%s", errorMsg))
+		// NOTE: could consider saving the config anyway (temp, don't "sendevent") so you don't have to re-enter everything
+		// but can't since we don't have an ID
+		//		 d.config.AVRs[serialNumber] = &avr
+		return errorMsg
 	}
 	log.Infof("Got model: %v, at IP: %v\n", avr.Model, avr.ID)
-	serialNumber := "033E2543" // TODO: change to get from device, but needs to be unique... serial # available -UDP & HTTP (http://192.168.1.221:49154/MediaRenderer/desc.xml)?
 
+	serialNumber := avr.ID
+	// TODO: see if we can skip if altogether - just do else part?
 	existing := d.config.get(serialNumber)
 	// get returns a pointer, so existing refers to actual config device, not a copy
 	if existing != nil {
-		log.Infof("Re-ceating previously stored AVR, %v (%v)\n", avr.ID, existing.ID)
+		// recreating existing device
 		existing.IP = avr.IP
 		existing.Model = avr.Model
 		existing.Name = avr.Name
 		existing.Zones = avr.Zones
-		//		existing.Zone = avr.Zone	// not set in save anymore - remove...
-		//		existing.VolumeIncrement = avr.VolumeIncrement
+		//	existing.VolumeIncrement = avr.VolumeIncrement  // Put back in if using this (not ApplyVolume)
 		existing.MaxVolume = avr.MaxVolume
 		existing.UpdateInterval = avr.UpdateInterval
 		device, ok := d.devices[serialNumber]
@@ -170,18 +160,21 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 		}
 	} else {
 		// new AVR - first-time setup
-		log.Infof("First time - new AVR")
-		avr.ID = serialNumber // ?? see above, get from XML
+		if err = d.createAVRDevice(&avr); err != nil {
+			return err
+		}
 		d.config.AVRs[serialNumber] = &avr
-
-		go d.createAVRDevice(&avr)
 	}
 	//	fmt.Printf("Config now: %v\n", d.config)
 	return d.SendEvent("config", d.config)
 }
 
+// deleteAVR deletes an AVR from the config map
+// NOTE: we can't yet unexport a device, so...?
 func (d *Driver) deleteAVR(id string) error {
 	delete(d.config.AVRs, id)
+	// not sure about deleting devices - doesn't actually delete the device...
+	delete(d.devices, id)
 
 	err := d.SendEvent("config", &d.config)
 
