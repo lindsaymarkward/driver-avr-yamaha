@@ -14,7 +14,9 @@ type Device struct {
 	avr *ync.AVR
 }
 
-func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
+// makeNewDevice creates a Ninja Sphere Media Player device and
+// sets all of the functions to handle events for play/pause/volume/power...
+func makeNewDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 	log.Infof("Making new device for %v AVR with serial number %v at IP %v\n", cfg.Model, cfg.ID, cfg.IP)
 
 	player, err := devices.CreateMediaPlayerDevice(driver, &model.Device{
@@ -34,11 +36,9 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 		return nil, err
 	}
 
-	avr := ync.AVR{
-		IP: cfg.IP,
-		// TODO: where do these get set... what here?
-		// serial (ID) & name ??
-	}
+	avr := ync.AVR{IP: cfg.IP}
+	// no need to set serial (ID) & name as this is just so we can access the ync library
+	// those are all stored in the driver config
 
 	player.ApplyIsOn = func() (bool, error) {
 		return avr.GetPower(cfg.Zone)
@@ -145,7 +145,7 @@ func newDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 		player.Log().Errorf("Failed to enable on-off channel: %s", err)
 	}
 
-	// TODO: this is a workaround to get on/off when dragging to on/play or off/pause. Find a better way if possible
+	// NOTE: this is a workaround to get on/off when dragging to on/play or off/pause. Find a better way if possible
 	// https://discuss.ninjablocks.com/t/mediaplayer-device-drivers/3776/2 (question asked)
 	player.ApplyPlayPause = func(isPlay bool) error {
 		if isPlay {
@@ -168,9 +168,11 @@ func roundPlaces(f float64, places int) float64 {
 	shift := math.Pow(10, float64(places))
 	return round(f*shift) / shift
 }
+
 func round(f float64) float64 {
 	return math.Floor(f + .5)
 }
+
 func conformToClosest(value, step float64) float64 {
 	multiples := int(value / step)
 	newValue := float64(multiples) * step

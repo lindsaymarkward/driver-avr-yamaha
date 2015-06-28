@@ -1,5 +1,9 @@
 package main
 
+// sphere-yamaha Ninja Sphere driver for Yamaha AV Receivers
+// using YNC (Yamaha Network Control) protocol from go-ync (https://github.com/lindsaymarkward/go-ync)
+// Lindsay Ward, June 2015 - https://github.com/lindsaymarkward/sphere-yamaha
+
 import (
 	"time"
 
@@ -28,15 +32,7 @@ type Config struct {
 	AVRs map[string]*AVRConfig
 }
 
-func (c *Config) get(id string) *AVRConfig {
-	for _, avr := range c.AVRs {
-		if avr.ID == id {
-			return avr
-		}
-	}
-	return nil
-}
-
+// an AVRConfig stores details about an AV Receiver including reference to the ync library's AVR struct
 type AVRConfig struct {
 	ync.AVR                 // IP, ID, Name
 	VolumeIncrement float64 `json:"volumeIncrement,string,omitempty"`
@@ -46,6 +42,8 @@ type AVRConfig struct {
 	UpdateInterval  int     `json:"updateInterval,string,omitempty"`
 }
 
+// NewDriver creates a new driver with an empty map of names
+// initialises and exports Ninja stuff
 func NewDriver() (*Driver, error) {
 	driver := &Driver{
 		devices: make(map[string]*Device),
@@ -64,6 +62,8 @@ func NewDriver() (*Driver, error) {
 	return driver, nil
 }
 
+// Start runs when the driver is started - called by the Ninja system (not the driver itself),
+// creates devices for all AVRs in the config, exports the configuration service
 func (d *Driver) Start(config *Config) error {
 	log.Infof("Driver starting with config %+v", config)
 
@@ -72,7 +72,6 @@ func (d *Driver) Start(config *Config) error {
 	}
 
 	d.config = *config
-	//	d.config = &Config{}
 
 	for _, cfg := range config.AVRs {
 		d.createAVRDevice(cfg)
@@ -85,6 +84,7 @@ func (d *Driver) Start(config *Config) error {
 	return nil
 }
 
+// UpdateStates updates all relevant states in the driver to account for external changes to the AVR
 func (d *Driver) UpdateStates(device *Device, config *AVRConfig) error {
 	// set current states
 	state, err := device.avr.GetState(config.Zone)
@@ -100,9 +100,11 @@ func (d *Driver) UpdateStates(device *Device, config *AVRConfig) error {
 	return nil
 }
 
+// createAVRDevice makes a new device from the config details passed in,
+// starts a function that regularly updates the driver states
 func (d *Driver) createAVRDevice(config *AVRConfig) error {
 
-	device, err := newDevice(d, config)
+	device, err := makeNewDevice(d, config)
 	if err != nil {
 		errorMsg := fmt.Errorf("Failed to create new Yamaha AVR device IP:%s ID:%s name:%s - %s", config.IP, config.ID, config.Name, err)
 		log.Errorf(fmt.Sprintf("%s", errorMsg))
@@ -134,38 +136,25 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 	if err != nil {
 		errorMsg := fmt.Errorf("Could not connect to AVR (%v). Is it online?\n", err)
 		log.Errorf(fmt.Sprintf("%s", errorMsg))
-		// NOTE: could consider saving the config anyway (temp, don't "sendevent") so you don't have to re-enter everything
-		// but can't since we don't have an ID
-		//		 d.config.AVRs[serialNumber] = &avr
+		// NOTE: could consider saving the config anyway (temp, don't "sendevent")
+		// so you don't have to re-enter everything, but seems we can't since we don't have an ID
 		return errorMsg
 	}
 	log.Infof("Got model: %v, at IP: %v\n", avr.Model, avr.ID)
 
-	serialNumber := avr.ID
-	// TODO: see if we can skip if altogether - just do else part?
-	existing := d.config.get(serialNumber)
-	// get returns a pointer, so existing refers to actual config device, not a copy
-	if existing != nil {
-		// recreating existing device
-		existing.IP = avr.IP
-		existing.Model = avr.Model
-		existing.Name = avr.Name
-		existing.Zones = avr.Zones
-		//	existing.VolumeIncrement = avr.VolumeIncrement  // Put back in if using this (not ApplyVolume)
-		existing.MaxVolume = avr.MaxVolume
-		existing.UpdateInterval = avr.UpdateInterval
-		device, ok := d.devices[serialNumber]
-		if ok {
-			device.avr.IP = avr.IP
-		}
+	// if AVR already exists in config, just update config; otherwise, create new device
+	_, ok := d.config.AVRs[avr.ID]
+	if ok {
+		// NOTE: here is where we could handle multiple devices for one AVR - multiple zones
+		// use a config option, check it here - if it's wanted, use serial number + zone as key
+		d.config.AVRs[avr.ID] = &avr
 	} else {
-		// new AVR - first-time setup
+		// new AVR - first-time setup, create device
 		if err = d.createAVRDevice(&avr); err != nil {
 			return err
 		}
-		d.config.AVRs[serialNumber] = &avr
+		d.config.AVRs[avr.ID] = &avr
 	}
-	//	fmt.Printf("Config now: %v\n", d.config)
 	return d.SendEvent("config", d.config)
 }
 
@@ -173,7 +162,7 @@ func (d *Driver) saveAVR(avr AVRConfig) error {
 // NOTE: we can't yet unexport a device, so...?
 func (d *Driver) deleteAVR(id string) error {
 	delete(d.config.AVRs, id)
-	// not sure about deleting devices - doesn't actually delete the device...
+	// not sure about deleting devices - doesn't actually delete the device unless we restart the driver...
 	delete(d.devices, id)
 
 	err := d.SendEvent("config", &d.config)

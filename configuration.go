@@ -6,11 +6,12 @@ import (
 
 	"strconv"
 
+	"github.com/lindsaymarkward/go-ync"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/go-ninja/suit"
 )
 
-// TODO: optional force input on ON/Play
+// TODO: idea: make an option to force a particular input on ON/Play, or double-tap to cycle inputs
 // TODO: make desired inputs a config item? (ideally, get from device, but doesn't seem possible?)
 var inputs = []string{"NET RADIO", "AUDIO1", "AUDIO2", "USB", "TUNER"}
 
@@ -18,6 +19,7 @@ type configService struct {
 	driver *Driver
 }
 
+// GetActions is called by the Ninja Sphere system and returns the actions that this driver performs
 func (c *configService) GetActions(request *model.ConfigurationRequest) (*[]suit.ReplyAction, error) {
 	return &[]suit.ReplyAction{
 		suit.ReplyAction{
@@ -28,6 +30,7 @@ func (c *configService) GetActions(request *model.ConfigurationRequest) (*[]suit
 	}, nil
 }
 
+// Configure is the handler for all configuration screen requests
 func (c *configService) Configure(request *model.ConfigurationRequest) (*suit.ConfigurationScreen, error) {
 	log.Infof("Incoming configuration request. Action:%s Data:%s", request.Action, string(request.Data))
 
@@ -50,9 +53,8 @@ func (c *configService) Configure(request *model.ConfigurationRequest) (*suit.Co
 			return c.error(fmt.Sprintf("Failed to unmarshal save config request %s: %s", request.Data, err))
 		}
 
-		config := c.driver.config.get(values["avr"])
-
-		if config == nil {
+		config, ok := c.driver.config.AVRs[values["avr"]]
+		if !ok {
 			return c.error(fmt.Sprintf("Could not find AVR with id: %s", values["avr"]))
 		}
 		return c.edit(*config)
@@ -158,6 +160,7 @@ func (c *configService) Configure(request *model.ConfigurationRequest) (*suit.Co
 	}
 }
 
+// error is a generic config screen for displaying error messages
 func (c *configService) error(message string) (*suit.ConfigurationScreen, error) {
 	return &suit.ConfigurationScreen{
 		Sections: []suit.Section{
@@ -180,6 +183,7 @@ func (c *configService) error(message string) (*suit.ConfigurationScreen, error)
 	}, nil
 }
 
+// control is a config screen for controlling an AVR
 func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, error) {
 	var inputActions []suit.ActionListOption
 	mainTitle := "Main"
@@ -242,7 +246,7 @@ func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, erro
 			// TODO: (one day) only show if power is on; input selection doesn't work if power is off
 			suit.Section{
 				Title:    "Select Input - Zone " + fmt.Sprintf("%v", avr.Zone),
-				Subtitle: "Input selection doesn't work unless the zone's power is on.",
+				Subtitle: "Input selection doesn't work if the zone is off.",
 				Contents: []suit.Typed{
 					suit.InputHidden{
 						Name:  "ID",
@@ -293,6 +297,7 @@ func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, erro
 	return &screen, nil
 }
 
+// list is a config screen for displaying each of the AVRs with options for editing, deleting and controlling
 func (c *configService) list() (*suit.ConfigurationScreen, error) {
 
 	var avrs []suit.ActionListOption
@@ -375,16 +380,22 @@ func (c *configService) list() (*suit.ConfigurationScreen, error) {
 	return &screen, nil
 }
 
+// edit is a config screen for editing the config of an AVR
 func (c *configService) edit(config AVRConfig) (*suit.ConfigurationScreen, error) {
 
-	title := "New Yamaha AVR"
+	var title string
 	if config.ID != "" {
 		title = "Editing Yamaha AVR (" + config.Model + ")"
+	} else {
+		title = "New Yamaha AVR"
+		config.MaxVolume = ync.MaxVolume
+		config.UpdateInterval = 5
+		config.Zones = 2
 	}
 
 	screen := suit.ConfigurationScreen{
 		Title:    title,
-		Subtitle: "Please complete all of the fields.",
+		Subtitle: "Please complete all fields.",
 		Sections: []suit.Section{
 			suit.Section{
 				Contents: []suit.Typed{
@@ -404,7 +415,7 @@ func (c *configService) edit(config AVRConfig) (*suit.ConfigurationScreen, error
 						Placeholder: "IP address",
 						Value:       config.IP,
 					},
-					// TODO: Consider if I can check # zones (can't just query amp?)
+					// NOTE: doesn't seem you can query amp to get # zones
 					suit.InputText{
 						Name:        "zones",
 						Before:      "Zones",
