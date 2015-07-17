@@ -6,7 +6,7 @@ import (
 
 	"strconv"
 
-	"github.com/lindsaymarkward/go-ync"
+	"github.com/lindsaymarkward/go-avr-yamaha"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/go-ninja/suit"
 )
@@ -224,7 +224,7 @@ func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, erro
 	}
 
 	screen := suit.ConfigurationScreen{
-		Title: "Control " + avr.Name,
+		Title: "Control " + avr.Name + " (" + avr.Model + ")",
 		Sections: []suit.Section{
 			suit.Section{
 				Title: "Select Zone",
@@ -388,7 +388,7 @@ func (c *configService) edit(config AVRConfig) (*suit.ConfigurationScreen, error
 		title = "Editing Yamaha AVR (" + config.Model + ")"
 	} else {
 		title = "New Yamaha AVR"
-		config.MaxVolume = ync.MaxVolume
+		config.MaxVolume = avryamaha.MaxVolume
 		config.UpdateInterval = 5
 		config.Zones = 2
 	}

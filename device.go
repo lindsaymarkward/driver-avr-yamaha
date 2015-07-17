@@ -3,15 +3,15 @@ package main
 import (
 	"math"
 
+	"github.com/lindsaymarkward/go-avr-yamaha"
 	"github.com/lindsaymarkward/go-ninja/devices"
-	"github.com/lindsaymarkward/go-ync"
 	"github.com/ninjasphere/go-ninja/channels"
 	"github.com/ninjasphere/go-ninja/model"
 )
 
 type Device struct {
 	devices.MediaPlayerDevice
-	avr *ync.AVR
+	avr *avryamaha.AVR
 }
 
 // makeNewDevice creates a Ninja Sphere Media Player device and
@@ -36,8 +36,8 @@ func makeNewDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 		return nil, err
 	}
 
-	avr := ync.AVR{IP: cfg.IP}
-	// no need to set serial (ID) & name as this is just so we can access the ync library
+	avr := avryamaha.AVR{IP: cfg.IP}
+	// no need to set serial (ID) & name as this is just so we can access the avryamah (YNC) library
 	// those are all stored in the driver config
 
 	player.ApplyIsOn = func() (bool, error) {
@@ -89,8 +89,8 @@ func makeNewDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 			state.Level = &value
 		}
 
-		volumeRange := cfg.MaxVolume - ync.MinVolume
-		volume := (value * volumeRange) + ync.MinVolume
+		volumeRange := cfg.MaxVolume - avryamaha.MinVolume
+		volume := (value * volumeRange) + avryamaha.MinVolume
 		// clamp volume to multiples of 0.5 to match AVR requirements
 		volumeValue := int(conformToClosest(volume, 0.5) * 10)
 		//		log.Infof("volumeRange %v, volume %v, volumeValue %v\n", volumeRange, volume, volumeValue)
@@ -118,6 +118,8 @@ func makeNewDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 		player.UpdateOnOffState(false)
 		return avr.SetPower("Standby", cfg.Zone)
 	}
+
+	// TODO: replace "Standby" etc. with a boolean (3 places)
 
 	player.ApplyOn = func() error {
 		player.UpdateOnOffState(true)

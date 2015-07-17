@@ -1,4 +1,4 @@
-# sphere-yamaha
+# driver-avr-yamaha
 Ninja Sphere driver (Go) for controlling Yamaha Audio Video Receivers (AVRs)
 
 Allowing control of one zone at a time from the sphereamid and phone app
@@ -16,7 +16,7 @@ Use the configuration (in Labs or http://ninjasphere.local) to:
 Installation
 ------------
 
-Copy both package.json and the binary (from the release) into `/data/sphere/user-autostart/drivers/sphere-yamaha` (create the directory as needed) and run `nservice sphere-yamaha start` on (or restart) the sphereamid.
+Copy both package.json and the binary (from the release) into `/data/sphere/user-autostart/drivers/driver-avr-yamaha` (create the directory as needed) and run `nservice driver-avr-yamaha start` on (or restart) the sphereamid.
 
 Known Issues
 ------------

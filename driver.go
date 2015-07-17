@@ -1,15 +1,15 @@
 package main
 
-// sphere-yamaha Ninja Sphere driver for Yamaha AV Receivers
-// using YNC (Yamaha Network Control) protocol from go-ync (https://github.com/lindsaymarkward/go-ync)
-// Lindsay Ward, June 2015 - https://github.com/lindsaymarkward/sphere-yamaha
+// driver-avr-yamaha Ninja Sphere driver for Yamaha AV Receivers
+// using YNC (Yamaha Network Control) protocol from go-ync (https://github.com/lindsaymarkward/go-avr-yamaha)
+// Lindsay Ward, June 2015 - https://github.com/lindsaymarkward/driver-avr-yamaha
 
 import (
 	"time"
 
 	"fmt"
 
-	"github.com/lindsaymarkward/go-ync"
+	"github.com/lindsaymarkward/go-avr-yamaha"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/channels"
 	"github.com/ninjasphere/go-ninja/logger"
@@ -34,7 +34,7 @@ type Config struct {
 
 // an AVRConfig stores details about an AV Receiver including reference to the ync library's AVR struct
 type AVRConfig struct {
-	ync.AVR                 // IP, ID, Name
+	avryamaha.AVR           // IP, ID, Name
 	VolumeIncrement float64 `json:"volumeIncrement,string,omitempty"`
 	MaxVolume       float64 `json:"maxVolume,string,omitempty"`
 	Zones           int     `json:"zones,string,omitempty"`
@@ -92,8 +92,8 @@ func (d *Driver) UpdateStates(device *Device, config *AVRConfig) error {
 		return err
 	}
 	// convert YNC volume value to float in range 0-1
-	volumeRange := config.MaxVolume - ync.MinVolume
-	volumeFloat := (state.Volume - ync.MinVolume) / volumeRange
+	volumeRange := config.MaxVolume - avryamaha.MinVolume
+	volumeFloat := (state.Volume - avryamaha.MinVolume) / volumeRange
 
 	device.UpdateVolumeState(&channels.VolumeState{Level: &volumeFloat, Muted: &state.Muted})
 	device.UpdateOnOffState(state.Power)
