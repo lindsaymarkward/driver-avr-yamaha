@@ -11,9 +11,9 @@ import (
 	"github.com/ninjasphere/go-ninja/suit"
 )
 
-// TODO: idea: make an option to force a particular input on ON/Play, or double-tap to cycle inputs
+// TODO: idea: make an option to force a particular input on ON/Play, or double-tap to cycle inputs (?)
 // TODO: make desired inputs a config item? (ideally, get from device, but doesn't seem possible?)
-var inputs = []string{"NET RADIO", "AUDIO1", "AUDIO2", "USB", "TUNER"}
+var inputs = []string{"NET RADIO", "TUNER", "AUDIO1", "AUDIO2", "V-AUX", "USB", "DOCK", "PC"}
 
 type configService struct {
 	driver *Driver
@@ -199,19 +199,44 @@ func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, erro
 		Value: "1",
 	}}
 	// TODO: (one day if needed), show inputs relevant to current zone (e.g. Zone 2 has no HDMI)
-	// create input actions
-	currentInput, _ := avr.GetInput(avr.Zone)
-	for _, input := range inputs {
-		selected := ""
-		if input == currentInput {
-			selected = " *"
+	// create input actions - only if power is on
+	var inputSection suit.Section
+	if powerOn, _ := avr.GetPower(avr.Zone); powerOn {
+
+		currentInput, _ := avr.GetInput(avr.Zone)
+		for _, input := range inputs {
+			selected := ""
+			if input == currentInput {
+				selected = " *"
+			}
+			inputActions = append(inputActions, suit.ActionListOption{
+				Title: input + selected,
+				Value: input,
+			})
 		}
-		inputActions = append(inputActions, suit.ActionListOption{
-			Title: input + selected,
-			Value: input,
-		})
+		inputSection = suit.Section{
+			Title: "Select Input - Zone " + fmt.Sprintf("%v", avr.Zone),
+			Contents: []suit.Typed{
+				suit.InputHidden{
+					Name:  "ID",
+					Value: avr.ID,
+				},
+				suit.ActionList{
+					Name:    "input",
+					Options: inputActions,
+					PrimaryAction: &suit.ReplyAction{
+						Name:        "input",
+						DisplayIcon: "arrow-circle-right",
+					},
+				},
+			},
+		}
+	} else {
+		inputSection = suit.Section{
+			Title: "Zone selection not available when power is off",
+		}
 	}
-	// create zone actions (main already defined)
+	// create zone actions (main zone is already defined)
 	for i := 2; i < avr.Zones+1; i++ {
 		selected := ""
 		if i == avr.Zone {
@@ -243,32 +268,10 @@ func (c *configService) control(avr *AVRConfig) (*suit.ConfigurationScreen, erro
 					},
 				},
 			},
-			// TODO: (one day) only show if power is on; input selection doesn't work if power is off
-			suit.Section{
-				Title:    "Select Input - Zone " + fmt.Sprintf("%v", avr.Zone),
-				Subtitle: "Input selection doesn't work if the zone is off.",
-				Contents: []suit.Typed{
-					suit.InputHidden{
-						Name:  "ID",
-						Value: avr.ID,
-					},
-					suit.ActionList{
-						Name:    "input",
-						Options: inputActions,
-						PrimaryAction: &suit.ReplyAction{
-							Name:        "input",
-							DisplayIcon: "arrow-circle-right",
-						},
-					},
-				},
-			},
+			inputSection, // this is the input selection (only useful when AVR is on)
 			suit.Section{
 				Title: "Power - Zone " + fmt.Sprintf("%v", avr.Zone),
 				Contents: []suit.Typed{
-					//					suit.InputHidden{
-					//						Name:  "ID",
-					//						Value: avr.ID,
-					//					},
 					suit.ActionList{
 						Name:    "ID",
 						Options: []suit.ActionListOption{suit.ActionListOption{Title: "Turn On", Value: avr.ID}},

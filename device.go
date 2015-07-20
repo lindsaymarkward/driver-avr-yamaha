@@ -116,14 +116,12 @@ func makeNewDevice(driver *Driver, cfg *AVRConfig) (*Device, error) {
 	// on-off channel methods
 	player.ApplyOff = func() error {
 		player.UpdateOnOffState(false)
-		return avr.SetPower("Standby", cfg.Zone)
+		return avr.SetPower(false, cfg.Zone)
 	}
-
-	// TODO: replace "Standby" etc. with a boolean (3 places)
 
 	player.ApplyOn = func() error {
 		player.UpdateOnOffState(true)
-		return avr.SetPower("On", cfg.Zone)
+		return avr.SetPower(true, cfg.Zone)
 	}
 
 	player.ApplyToggleOnOff = func() error {

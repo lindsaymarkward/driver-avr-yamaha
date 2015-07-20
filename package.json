@@ -1,7 +1,7 @@
 {
   "id": "lindsaymarkward.driver-avr-yamaha",
   "name": "Yamaha AVR Driver",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Control of Yamaha AVR (Audio Video Receivers) using HTTP",
   "main": "driver-avr-yamaha",
   "scripts": {

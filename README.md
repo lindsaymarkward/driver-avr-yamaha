@@ -8,7 +8,7 @@ Allowing control of one zone at a time from the sphereamid and phone app
   
 Use the configuration (in Labs or http://ninjasphere.local) to:
  
-  - create and edit an AVR (name, maximum volume, update frequency)
+  - create and edit an AVR (IP, name, maximum volume, update frequency)
   - control power
   - set zone 
   - set input/power for selected zone
